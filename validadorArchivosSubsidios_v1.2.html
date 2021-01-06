@@ -1,0 +1,681 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+
+  <head>
+    <meta charset="UTF-8">
+	<link rel="stylesheet" href="subStyle.css">
+    <script src="jquery.min.js"></script>
+    <script src="md5.js"></script>
+    <script src="q.js"></script>
+    <script src="FileSaver.js"></script>
+    <script src="jszip.js"></script>
+    <script src="papaparse.min.js"></script>
+    <title>ANT Validador Archivos de SUBSIDIOS</title>	
+  </head>
+	
+	
+  <body>
+  
+    <div class="container" style="padding:10px 10px;">
+      <h1>Validador de Carga de Información para Subsidios de TAXIS</h1>
+	  
+      <div id="header"></div>
+      <div class="sty_cab">
+        <!--<div class="row">-->
+          <!--<form class="form-inline"> -->
+		  <form class="form-inline">
+            <div class="form-group"> 
+              <label for="file">Seleccione archivo en formato CSV:</label>
+              <input type="file" id="file" class="form-control" accept=".csv" required />
+            </div>
+            <!--<div class="form-group">-->
+              <button type="submit" id="submit-file" class="btn btn-primary">Procesar</button>
+			  
+			  <div id="estado" style="display:none">
+				<b>Procesando el archivo, espere por favor...</b>
+			  </div>	
+            <!--</div>-->
+          </form> 
+		<!--</div>	-->		
+     </div>
+	 
+     <div class="row" <div class="row" id="parsed_csv_list"></div>
+    </div>
+
+
+    <div id="footer"></div>				
+	
+    <script type="text/javascript">
+      $(document).ready(function() {
+        $('#header').load('../header-ads.html');
+        $('#footer').load('../footer-ads.html');
+
+        $('#submit-file').on("click", function(e) {
+          e.preventDefault();
+          $('#file').parse({
+            config: {
+              delimiter: "auto",
+              complete:  mostrarDatosHTML, 
+            },
+            before: function(file, inputElem) {			  
+			  document.getElementById("submit-file").style.display = 'none';
+			  document.getElementById("estado").style.display = 'inline';
+			  console.log("Analizando el archivo...", file);
+			  refrescarTabla();
+            },
+            error: function(err, file) {
+              console.log("ERROR:", err, file);
+            },
+            complete: function() {
+              console.log("Proceso finalizado, con todos los registros...");
+			  
+            }
+          });
+		  
+        });
+	
+	function validarPlaca(placaVehiculo){
+		var placa = placaVehiculo.toUpperCase();
+		var vnum = 0;
+		var vlet = 0;
+		for (p = 0; p < placa.length; p++) {
+			var r = placa[p];
+			//valida caracteres de parametro placa
+			if (p <= 2){
+				if (r.charCodeAt() < 65 || r.charCodeAt() >90){
+					//console.log("ERROR (l) "+r);	
+					vnum = 1;					
+				}				
+			}	
+			else{
+				if (r.charCodeAt() < 48 || r.charCodeAt() >57){
+					//console.log("ERROR (N) "+r);	
+					vlet = 1;					
+				}
+			}	
+		}
+		if(vnum == null){
+			vnum = 0;
+		}
+		if(vlet == null){
+			vlet = 0;
+		}
+		return vnum = vnum + vlet;
+	}
+	
+	function validarFecha(fecha,anio,mes){
+		var vnum = 0;
+		var vlet = 0;
+		var resultado = 0;
+		var obs = "";
+		for (p = 0; p < fecha.length; p++) {
+			var r = fecha[p];
+			//valida caracteres de parametro fecha
+			if (p == 0 || p == 1 || p == 3 || p == 4 || p == 6 || p == 7 || p == 8 || p == 9){
+				if (r.charCodeAt() < 48 || r.charCodeAt() >57){
+					//console.log("ERROR (N) "+r);	
+					vnum = 1;					
+				}				
+			}	
+			else{
+				if (r.charCodeAt() != 47) {
+					//console.log("ERROR (/) "+r);	
+					vlet = 1;					
+				}
+			}	
+		}
+		if(vnum == null){
+			vnum = 0;
+		}
+		if(vlet == null){
+			vlet = 0;
+		}
+		
+		if (vnum + vlet > 0) {
+			// obs = "ERROR DE FORMATO ";
+			resultado = 0;
+		}
+		else{
+			//formato OK
+			obs = fecha.substr(6,4) + fecha.substr(3,2) + fecha.substr(0,2);
+			
+			//validar fecha vigencia del título habilitante con el anio y mes de subsidio
+			if (fecha.substr(6,4) != anio || mes != fecha.substr(3,2)){
+				resultado = -1;
+			}
+			else{
+				resultado = obs;
+			}	
+		}
+		return resultado;
+	}
+		
+	function validarNumero(numero){
+		var vnum = 0;
+		var obs = "";
+		for (p = 0; p < numero.length; p++) {
+			var r = numero[p];
+			//valida caracteres solo numeros
+			if (r.charCodeAt() < 48 || r.charCodeAt() >57){
+				//	console.log("ERROR (N) "+r);	
+				vnum = 1;					
+			}	
+		}
+		if (vnum == 1){
+			obs = "ERROR DE FORMATO ";
+		}
+		else{
+			obs = "";
+		}
+		return obs;
+	}	
+	
+	function ocultarDatosHTML(id_obj) {
+		document.getElementById(id_obj).style.display = 'none';
+	}
+	
+	function refrescarTabla(){
+		var table = "<table class='table' id='tabla'>";
+		table += "</table>";
+		$("#parsed_csv_list").html(table);
+	}
+		
+	function mostrarDatosHTML(results) {	
+		var table = "<table class='table' id='tabla'>";
+		var data = results.data;
+		var campo0 ="";
+		var campo1 ="";
+		var campo2 ="";
+		var campo3 ="";
+		var campo4 ="";
+		var campo5 ="";
+		var campo6 ="";
+		var campo7 ="";
+		var campo8 ="";
+		var campo9 ="";
+		var campo10 ="";
+		var campo11 ="";
+
+		var error = 0;
+		var total = 0;
+		var total_reg = 0;
+		var nvalor = 0;
+		var svalor = "";
+		const gad_rx = 181;
+		const long_ced = 10;
+		const long_ruc = 13;
+		const long_pla = 7;
+		const long_ope = 250;
+		const long_soc = 250;		  
+		const long_doc = 250;	
+		const long_fec = 10;	
+		var placas=[];
+		var cedula=[];
+		var x = 0;
+		var y = 0;
+		var aux = 0;
+		var observa ="";
+		var sval ="";
+
+		//Etiquetas de cabecera		
+		document.getElementById("parsed_csv_list").style.display = 'inline';
+		table += "<tr class='estilo3'>";
+		table += "<td>";
+		table += "</th>Nro. Registro";	
+		table += "<td>";
+		table += "</th>Código GAD / Mancomunidad";
+		table += "<td>";
+		table += "</th>Año";
+		table += "<td>";
+		table += "</th>Mes";
+		table += "<td>";
+		table += "</th>Tipo de Servicio";	
+		table += "<td>";
+		table += "</th>Nombre Operadora";	
+		table += "<td>";
+		table += "</th>Ruc Operadora";
+		table += "<td>";
+		table += "</th>Nombre del Socio";
+		table += "<td>";
+		table += "</th>Ced. Socio";
+		table += "<td>";
+		table += "</th>Ruc Socio";
+		table += "<td>";
+		table += "</th>Placa Vehículo";
+		table += "<td>";
+		table += "</th>Fecha Inicio Título Habilitante";
+		table += "<td>";
+		table += "</th>Fecha Final Título Habilitante";
+		table += "<td>";
+		table += "</th>Observación";
+		table += "</tr>";
+		
+		// valor para codigo del GAD entre 1 y 181 
+		for (i = 0; i < data.length; i++) {
+			//table += "<tr>";
+			var row = data[i];
+			var cells = row.join(";").split(";");
+			var observa = "";	
+
+
+			for (j = 0; j < cells.length; j++) {
+			  //table += "<td>";
+			  var svalor = cells[j];
+			  var nvalor = cells[j];
+			  
+			  //valida valores nulos
+			  if (svalor == null || svalor == ""){
+				var aux = 1;
+				//var observa = observa+"*DATO NULO. ";
+			  }
+			  else{
+				var aux = 0;				
+			  }
+
+				switch (j) { 
+					case 0: //CODIGO DEL GAD/MANCOMUNIDAD
+					var campo0 = svalor; 
+					if (aux == 1)  //VACIO
+					{	
+						var observa = observa+"*CODIGO_GAD_MANCOMUNIDAD VACIO. ";
+					}
+					else{
+						sval = validarNumero(svalor);
+						if (sval.length > 0 ){
+							var observa = observa+"*CODIGO_GAD_MANCOMUNIDAD "+sval+". ";
+						}
+						
+						if (nvalor <=0 || nvalor > gad_rx) {					
+							var observa = observa+"*CODIGO_GAD_MANCOMUNIDAD: "+nvalor+ " DEBE SER ENTRE: 1 Y "+gad_rx+". ";
+						}
+					}					
+					break;
+					
+					case 1: //ANIO_SUBSIDIO			
+					var campo1 = svalor; 
+					if (aux == 1){
+							var observa = observa+"*ANIO_SUBSIDIO VACIO. ";
+					}
+					else{
+						sval = validarNumero(svalor);
+						if (sval.length > 0 ){
+							var observa = observa+"*ANIO_SUBSIDIO "+sval+". ";
+						}
+						
+						if (nvalor <=0 || nvalor < 2018 || svalor.length != 4) {
+							var observa = observa+"*ANIO_SUBSIDIO INCORRECTO: "+nvalor+" ";
+						}						
+					}
+					break;
+					
+					case 2: //MES_SUBSIDIO			
+					var campo2 = svalor; 
+					if (aux == 1){
+							var observa = observa+"*MES_SUBSIDIO VACIO. ";
+					}
+					else{		
+						sval = validarNumero(svalor);
+						if (sval.length > 0 ){
+							var observa = observa+"*MES_SUBSIDIO "+sval+". ";
+						}
+						
+						if (nvalor <=0 || nvalor > 12){
+							var observa = observa+"*MES_SUBSIDIO INCORRECTO: "+nvalor+" ";				
+						}
+					}
+					break;
+					
+					case 3: 	//TIPO_SERVICIO			
+					var campo3 = svalor; 
+					if (aux == 1){
+							var observa = observa+"*TIPO DE SERVICIO VACIO. ";
+					}
+					else{
+						if (svalor != 'C' && svalor != 'E'){
+							var observa = observa+"*TIPO_SERVICIO DEBE SER: C = CONVENCIONAL o E = EJECUTIVO. ";
+						}							
+					}
+					break;
+					
+					case 4: //NOMBRE_OPERADORA		
+					var campo4 = svalor; 	
+					if (aux == 1){
+							var observa = observa+"*NOMBRE_OPERADORA VACIO. ";
+					}
+					else{
+						var x = svalor.length;
+						if (x > long_ope){						
+							var observa = observa+"*NOMBRE_OPERADORA ,LONGITUD INCORRECTA: "+x+", IGUALAR LONGITUD: "+long_ope+". ";
+						}							
+					}			
+					break;
+					
+					case 5: //RUC_OPERADORA
+					var campo5 = svalor; 					
+					if (aux == 1){
+						var observa = observa+"*RUC_OPERADORA VACIO. ";
+					}
+					else{
+						sval = validarNumero(svalor);
+						if (sval.length > 0 ){
+							var observa = observa+"*RUC_OPERADORA "+sval+". ";
+						}
+						
+						var x = svalor.length;
+						if (x != long_ruc){
+							var observa = observa+"*RUC_OPERADORA,LONGITUD INCORRECTA: "+x+", IGUALAR LONGITUD: "+long_ruc+". ";
+						}
+					}	
+					break;
+					
+					case 6: //NOMBRE_SOCIO		
+					var campo6 = svalor; 
+					if (aux == 1){
+						var observa = observa+"*NOMBRE_SOCIO VACIO. ";
+					}
+					else{
+						var x = svalor.length;
+						if (x > long_ope){
+							var observa = observa+"*NOMBRE_SOCIO LONGITUD INCORRECTA, MAXIMO: "+long_ope+". ";
+						}
+					}						
+					break;
+					
+					case 7: //CEDULA_SOCIO		
+					var campo7 = svalor; 
+					if (aux == 1){
+						var observa = observa+"*CEDULA_SOCIO VACIO. ";
+					}
+					else{
+						sval = validarNumero(svalor);
+						if (sval.length > 0 ){
+							var observa = observa+"*CEDULA_SOCIO "+sval+". ";
+						}
+						
+						var x = svalor.length;
+						if (x != long_ced){
+							var observa = observa+"*CEDULA_SOCIO LONGITUD INCORRECTA: "+x+", IGUALAR A LONGITUD: "+long_ced+". ";
+						}						
+					}
+					break;
+					
+					case 8: //RUC_SOCIO	
+					var campo8 = svalor; 	
+					if (aux == 1){
+						var observa = observa+"*RUC_SOCIO VACIO. ";
+					}
+					else{
+						sval = validarNumero(svalor);
+						if (sval.length > 0 ){
+							var observa = observa+"*RUC_SOCIO "+sval+". ";
+						}
+						
+						//valida la longitud
+						var x = svalor.length;
+						if (x != long_ruc){
+							var observa = observa+"*RUC_SOCIO LONGITUD INCORRECTA: "+x+", IGUALAR LONGITUD: "+long_ruc+". ";
+						}
+						
+						//valida cedula+001 igual a RUC
+						if (campo7+'001'  != svalor){
+							var observa = observa+"*RUC_SOCIO INCORRECTO: "+svalor+", DEBE SER: "+campo7+"001 . ";
+						}
+					}	
+					break;
+					
+					case 9: //PLACA_VEHICULO
+					var campo9 = svalor;
+					cedula[i] = cells[7]; //nuevo ***
+					placas[i] = cells[j]; //nuevo ***
+					
+					if (aux == 1){
+						var observa = observa+"*PLACA_VEHICULO VACIA. ";
+					}
+					else{
+						var x = svalor.length;
+						if (x != long_pla){
+							var observa = observa+"*PLACA_VEHICULO LONGITUD INCORRECTA: "+x+", IGUALAR LONGITUD: "+long_pla+". ";
+						}else{						
+							x = validarPlaca(svalor);
+							if (x > 0){
+								var observa = observa+"*PLACA_VEHICULO FORMATO INCORRECTO: "+svalor+", FORMATO CORRECTO: AAA####. ";
+							}							
+							
+							//verifica duplicados placa
+							if ((placas.indexOf(campo9) != i && placas.indexOf(campo9) > 0) && (cedula.indexOf(campo7) != i && cedula.indexOf(campo7) > 0)){
+								var observa = observa+"*PLACA DUPLICADA. ";
+							}						
+						}	
+					}
+					break;
+					
+					case 10: //FECHA_INICIO_TITULO_HABILITANTE
+					var campo10 = svalor; 
+					if (aux == 1){
+						var observa = observa+"*FECHA_INICIO_TITULO_HABILITANTE VACIA, INGRESAR EN FORMATO DD/MM/AAAA ";
+					}
+					else{
+						var x = svalor.length;
+						if (x != long_fec){
+							var observa = observa+"*FECHA_INICIO_TITULO_HABILITANTE LONGITUD INCORRECTA: "+x+", IGUALAR LONGITUD: "+long_fec+". ";
+						}				
+					}	
+					break;
+					
+					case 11: //FECHA_FIN_TITULO_HABILITANTE
+					var campo11 = svalor; 
+					if (aux == 1){
+						var observa = observa+"*FECHA_FIN_TITULO_HABILITANTE VACIA, INGRESAR EN FORMATO DD/MM/AAAA ";
+					}
+					else{
+						var x = svalor.length;
+						if (x != long_fec){
+							var observa = observa+"*FECHA_FIN_TITULO_HABILITANTE LONGITUD INCORRECTA: "+x+", IGUALAR LONGITUD: "+long_fec+". ";
+						}
+						
+						//valida formato y fecha del titulo habilitante
+						x = validarFecha(svalor, campo1, campo2);
+						y = validarFecha(cells[10],campo1, campo2); 
+						if (x == 0 ){
+							var observa = observa+"*ERROR DE FORMATO FECHA_FIN_TITULO_HABILITANTE "+sval+"DD/MM/AAAA. ";
+						}else if (y == 0 ){
+							var observa = observa+"*ERROR DE FORMATO FECHA_INICIO_TITULO_HABILITANTE "+sval+"DD/MM/AAAA. ";
+						}else if (x == -1 || y == -1){ //valida fechas correspondan al titulo habilitante con el anio y mes de subsidio
+							var observa = observa+"*ERROR FECHA INICIO O FINAL DEL TITULO_HABILITANTE NO CORRESPONDE AL AÑO O MES DE SUBSIDIO. ";						
+						}else if (x <= y){ //valida fechas 
+							var observa = observa+"*ERROR FECHA_FIN_TITULO_HABILITANTE DEBE SER MAYOR A FECHA_INICIO_TITULO_HABILITANTE. ";
+						}					
+					}
+					break;
+					
+				} //fin switch
+								
+				
+			} //fin for j	
+					
+			if (observa.length > 0 && row != ""){				
+				//detalle
+				table += "<tr>";
+				table += "<td>";
+				table += "</th>";
+				table += i+1;
+				table += "<td>";
+				table += "</th>";
+				table += campo0;
+				table += "<td>";
+				table += "</th>";
+				table += campo1;
+				table += "<td>";
+				table += "</th>";
+				table += campo2;
+				table += "<td>";
+				table += "</th>";
+				table += campo3;
+				table += "<td>";
+				table += "</th>";
+				table += campo4;
+				table += "<td>";
+				table += "</th>";
+				table += campo5;
+				table += "<td>";
+				table += "</th>";
+				table += campo6;
+				table += "<td>";
+				table += "</th>";
+				table += campo7;
+				table += "<td>";
+				table += "</th>";
+				table += campo8;
+				table += "<td>";
+				table += "</th>";
+				table += campo9;
+				table += "<td>";
+				table += "</th>";
+				table += campo10;
+				table += "<td>";
+				table += "</th>";
+				table += campo11;
+
+				table += "<td><FONT COLOR='RED'>";
+				table += "</th>";
+				table += observa;
+				table += "</tr>";
+				
+				var observa ="";
+				error++;
+			}
+            //table += "</tr>";			
+        } //fin for i
+		
+		//xfin =1;
+		if(error>0){
+			window.alert("EL ARCHIVO CONTIENE ERRORES...");
+			table += "</table>";
+			//refrescarTabla();	
+			$("#parsed_csv_list").html(table);	
+			//console.log("Proceso finalizado HTML");
+		}
+		else{
+			ocultarDatosHTML("parsed_csv_list");
+			console.log("EL ARCHIVO VALIDADO SATISFACTORIAMENTE...");
+			generarMD5();
+		}
+		document.getElementById("submit-file").style.display = 'inline';
+		document.getElementById("estado").style.display = 'none';
+	 }
+	
+	});
+    </script>
+
+
+  </body>
+
+</html>
+
+
+<script>
+	
+	function calculateMD5Hash(file, bufferSize) {
+	  var def = Q.defer();
+
+	  var fileReader = new FileReader();
+	  var fileSlicer = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice;
+	  var hashAlgorithm = new SparkMD5();
+	  var totalParts = Math.ceil(file.size / bufferSize);
+	  var currentPart = 0;
+	  var startTime = new Date().getTime();
+
+	  fileReader.onload = function(e) {
+		currentPart += 1;
+
+		def.notify({
+		  currentPart: currentPart,
+		  totalParts: totalParts
+		});
+
+		var buffer = e.target.result;
+		hashAlgorithm.appendBinary(buffer);
+
+		if (currentPart < totalParts) {
+		  processNextPart();
+		  return;
+		}
+
+		def.resolve({
+		  md5: hashAlgorithm.end(),
+		  duration: new Date().getTime() - startTime
+		});
+	  };
+
+	  fileReader.onerror = function(e) {
+		def.reject(e);
+	  };
+
+	  function processNextPart() {
+		var start = currentPart * bufferSize;
+		var end = Math.min(start + bufferSize, file.size);
+		fileReader.readAsBinaryString(fileSlicer.call(file, start, end));
+	  }
+
+	  processNextPart();
+	  return def.promise;
+	}
+
+	function generarZIP(data){
+		var input = document.getElementById('file');
+		if (!input.files.length) {
+				return;
+		}
+
+		var file = input.files[0];	
+		var zip = new JSZip();
+		var valorMD5 = data.toUpperCase();
+		var nfile = file.name.substr(0,file.name.indexOf("."));
+		zip.file(nfile+".md5", valorMD5);
+		zip.file(nfile+".csv", file);
+		zip.generateAsync({type:"blob"})
+		.then(function(content) {
+			// see FileSaver.js
+			saveAs(content, nfile+".zip");
+		});
+		descargarArchivoMD5(nfile+".md5",valorMD5);
+		window.alert("EL ARCHIVO FUE PROCESADO SATISFACTORIAMENTE. \nMD5: "+valorMD5);
+	}        
+
+	function descargarArchivoMD5(filename, text){
+		var element = document.createElement('a');
+		element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+		element.setAttribute('download', filename);
+		element.style.display = 'none';
+		document.body.appendChild(element);
+		element.click();
+		document.body.removeChild(element);
+	}
+
+	function generarMD5() {
+
+	  var input = document.getElementById('file');
+	  if (!input.files.length) {
+		return;
+	  }
+
+	  var file = input.files[0];
+	  var bufferSize = Math.pow(1024, 2) * 10; // 10MB
+
+	  calculateMD5Hash(file, bufferSize).then(
+		function(result) {
+		  // Success
+		  console.log(result.md5);
+		  generarZIP(result.md5);
+		},
+		function(err) {
+		  // There was an error,
+		  console.log("ERROR:", err, file);
+		},
+		function(progress) {
+		  // We get notified of the progress as it is executed
+		  console.log('GENERANDO MD5: ',progress.currentPart, 'de', progress.totalParts, 'Total bytes:', progress.currentPart * bufferSize, 'de', progress.totalParts * bufferSize);
+		});
+
+	}
+</script>
